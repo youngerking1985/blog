@@ -7,5 +7,12 @@ cmake -DCMAKE_CXX_FLAGS=-fPIC ../
 
 
 ## 二、pgrocks编译安装
-网上默认版本不支持pg13，下载youngerking1985下的fork版本，支持cmake和makefile在pg13下的编译；
-注意要修改配置文件重启
+网上默认版本不支持pg13，下载youngerking1985下的[fork版本](https://github.com/youngerking1985/pgrocks-fdw)，支持cmake和makefile在pg13下的编译；
+> 注意要修改配置文件重启
+
+## 三、测试
+可运行目录下的examples
+
+## 参考
+1. rocksdb官方编译说明： https://github.com/facebook/rocksdb/blob/main/INSTALL.md
+2. postgres外部表： https://github.com/youngerking1985/pgrocks-fdw
