@@ -2,7 +2,7 @@
 实验说明：
 - 实验环境采用centos7.6虚拟机，16core，32GB内存，一块系统盘，两块附加盘；
 - master，log，chunkserver等均在一台机器启动；
-- 
+  
 ## 一、源码下载及编译
 https://github.com/moosefs/moosefs/releases
 本验证环境采用3.0.116版本
