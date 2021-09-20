@@ -1,7 +1,11 @@
-# rocksdb hello world分析之一
-分析rocksdb 打开，关闭流程中，都做了什么，有哪些相关类及技术点；本篇文章从总体上进行阐述，对相关概念进行初步解释和整体流程理解，后续文章会分别就Options，MANIFEST等关键概念进行单独解读。
+# RocksDB源码分析之一：DB::Open流程及源码分析
+> 本系列文章，基于RocksDB 6.22.1
+- 分析rocksdb 打开，关闭流程中，都做了什么，有哪些相关类及技术点；
+- 解读过程会从场景示例出发，从现象到源码逐层解读；
+- 本篇文章从总体上进行阐述，对相关概念进行初步解释和整体流程理解，后续文章会分别就Options，MANIFEST、ColumnFamily等关键概念进行单独解读。
 
-## 代码及执行
+---
+## 现象分析：测试代码及执行结果
 在空目录下，执行DB::Open操作及关闭操作
 ``` c++
     //创建rocks目录
@@ -10,6 +14,7 @@
     options.create_if_missing = true;
 
     std::string dirPath = "/home/rocksdata";
+    //来自头文件db.h
     Status s = DB::Open(options, dirPath, &db);
     assert(s.ok());
 
@@ -26,7 +31,7 @@
 -rw-r--r--. 1 root root  6209 Sep 15 06:40 OPTIONS-000007
 ```
 
-## 生成的文件说明
+## 现象分析：生成的文件说明
 ### 术语解释
 - MANIFEST 指通过一个事务日志，来追踪- Rocksdb状态迁移的系统
 - Manifest日志 指一个独立的日志文件，它包含RocksDB的状态快照/版本
@@ -85,13 +90,118 @@ rocksdb的配置文件，OPTIONS-000007，每次运行会创建一个新的OPTIO
 - CheckOptionsCompatibility :一个用于检查两个RocksDB选项的兼容性。
 通过上面这些选项文件的支持，开发者再也不用维护以前的RocksDB数据库对象的配置集。另外，如果需要修改选项，CheckOptionsCompatibility可以保证新的配置集可以在不损坏已有数据的情况下打开同一个RocksDB数据库。
 
-## 相关类，函数实现
+## 源码解读：Open流程解读相关类，函数实现
+![Open初始化流程](../resources/rocksdb/openflow.drawio.png)
+### db_impl_open.cc
+DB::Open函数实现在db_impl_open.cc文件中
+```
+Status DB::Open(const Options& options, const std::string& dbname, DB** dbptr)
+DBImpl* impl = new DBImpl(db_options, dbname, seq_per_batch, batch_per_txn);
+```
+### db_impl.cc
+DB::Open打开后，实际创建的DB类是DBImpl类，在文件db_impl.cc中，初始化相关文件在DBImpl函数中。
+1. 创建操作LOG
+``` c++
+// DBImpl构造函数初始化过程中将调用SanitizeOptions，进入CreateLoggerFromOptions，如果目录不存在，将会创建文件夹，并创建名称为LOG的文件，记录操作的command情况
+DBImpl* impl = new DBImpl(db_options, dbname, seq_per_batch, batch_per_txn);
+```
 
-## 数据库文件打开、删除
+2. 创建相关初始化文件
+``` c++
+//将创建CURRENT、IDENTITY、LOCK、MANIFEST-000001、MANIFEST-000004文件
+s = impl->Recover(column_families, false, false, false, &recovered_seq);
+```
 
-## 写入
+3. 创建WAL文件
+``` c++
+//将创建000005.log
+s = impl->CreateWAL(new_log_number, 0 /*recycle_log_number*/,
+                        preallocate_block_size, &new_log);
+```
+### 源码解读:相关文件、类及函数
+此处主要解读 DBImpl::Open函数实现，通过代码注释方式
+``` c++
+Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
+                    const std::vector<ColumnFamilyDescriptor>& column_families,
+                    std::vector<ColumnFamilyHandle*>* handles, DB** dbptr,
+                    const bool seq_per_batch, const bool batch_per_txn) {
+// 验证数据库配置文件的一致性，猜是为了保证当前软件版本兼容输入的数据库目录存储
+  Status s = ValidateOptionsByTable(db_options, column_families);
+  if (!s.ok()) {
+    return s;
+  }
 
-## 查询
+  s = ValidateOptions(db_options, column_families);
+  if (!s.ok()) {
+    return s;
+  }
+
+  *dbptr = nullptr;
+  handles->clear();
+
+//设置写入缓存大小，默认值64MB，每个Column_Family独立
+  size_t max_write_buffer_size = 0;
+  for (auto cf : column_families) {
+    max_write_buffer_size =
+        std::max(max_write_buffer_size, cf.options.write_buffer_size);
+  }
+
+//创建DB实现类，继承自DB接口类，是主要实现入口，头文件db_impl.h，实现文件
+//分布在多个db_impl_*.cc文件中
+//简化函数入口设置的seq_per_batch默认值为true，batch_per_txn为true
+//seq_per_batch
+  DBImpl* impl = new DBImpl(db_options, dbname, seq_per_batch, batch_per_txn);
+  s = impl->env_->CreateDirIfMissing(impl->immutable_db_options_.wal_dir);
+  if (s.ok()) {
+    std::vector<std::string> paths;
+    for (auto& db_path : impl->immutable_db_options_.db_paths) {
+      paths.emplace_back(db_path.path);
+    }
+    for (auto& cf : column_families) {
+      for (auto& cf_path : cf.options.cf_paths) {
+        paths.emplace_back(cf_path.path);
+      }
+    }
+    for (auto& path : paths) {
+      s = impl->env_->CreateDirIfMissing(path);
+      if (!s.ok()) {
+        break;
+      }
+    }
+
+    // For recovery from NoSpace() error, we can only handle
+    // the case where the database is stored in a single path
+    if (paths.size() <= 1) {
+      impl->error_handler_.EnableAutoRecovery();
+    }
+  }
+  if (s.ok()) {
+    s = impl->CreateArchivalDirectory();
+  }
+  if (!s.ok()) {
+    delete impl;
+    return s;
+  }
+
+  impl->wal_in_db_path_ = IsWalDirSameAsDBPath(&impl->immutable_db_options_);
+
+  impl->mutex_.Lock();
+  // Handles create_if_missing, error_if_exists
+  uint64_t recovered_seq(kMaxSequenceNumber);
+  //创建DB基础文件
+  s = impl->Recover(column_families, false, false, false, &recovered_seq);
+  if (s.ok()) {
+    uint64_t new_log_number = impl->versions_->NewFileNumber();
+    log::Writer* new_log = nullptr;
+    const size_t preallocate_block_size =
+        impl->GetWalPreallocateBlockSize(max_write_buffer_size);
+    //创建WAL文件
+    s = impl->CreateWAL(new_log_number, 0 /*recycle_log_number*/,
+                        preallocate_block_size, &new_log);
+   ...
+  return s;
+}
+```
 
 ## 不同的数据库打开模式
 ### 默认DB::Open

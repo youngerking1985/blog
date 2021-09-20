@@ -5,7 +5,7 @@
 
 #### RocksDB系列
 1. [RocksDB安装编译](rocksdb/rocksdb_compile.md)
-2. [RocksDB基本运行流程解析之一](rocksdb/rocksdb_hello.md)
+2. [RocdsDB源码分析之一：DB::Open流程及源码分析](rocksdb/rocksdb_hello.md)
 3. [rocksdb hello 分析之二：put流程](rocksdb/rocksdb_puthello.md)
 
 #### 其他
