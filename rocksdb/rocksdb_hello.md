@@ -211,6 +211,7 @@ Status DBImpl::Open(const DBOptions& db_options, const std::string& dbname,
 ## 结论
 1. 采用DB::Open每次都会更新清单、日志等，采用OpenForReadOnly不会
 2. .log文件是wal文件，默认配置下做了put操作，将会在该文件写入数据，在数据库下次打开时，程序会先讲log的信息写入到sst中，并清理.log文件
+3. DB默认配置会写wal，如果不想写，可以手动关闭
 
 ## 疑问
 1. 默认option是否会写wal？
