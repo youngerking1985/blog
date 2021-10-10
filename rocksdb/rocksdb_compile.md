@@ -23,6 +23,32 @@ cmake -DCMAKE_CXX_FLAGS=-fPIC ../
 ## 三、测试
 可运行目录下的examples
 
+## 四、基于飞腾麒麟环境的编译记录（Arm架构）
+环境说明：Kylin 4.0.2；FT2000PLUS
+1. 该版本系统应该是采用ubuntu，需要通过apt-get进行包安装
+2. 编译采用的rocksdb版本为6.22；系统已经自带gcc，g++等
+### 4.1 更新cmake
+3. 系统默认环境cmake版本较低，需要重新编译cmake，配置cmake过程中发现需依赖libssl-dev，默认配置源没有该源
+4. 配置libssl-dev源，可参考https://blog.csdn.net/hknaruto/article/details/104654406，配置好后，通过```sudo apt-get update```更新源
+5. 安装ssl等，```sudo apt-get install openssl libssl-dev```安装ssl
+6. 配置，编译
+```
+sudo ./configure
+sudo make -j 64
+sudo make install
+sudo rm /usr/bin/cmake
+sudo ln -s /usr/local/bin/cmake /usr/bin/cmake
+cmake --version
+```
+### 4.2 编译rocksdb
+7. 安装snappy（不安装也可以），```sudo apt-get install libsnappy-dev```
+8. 编译，如果没有安装snappy，删除-DWITH_SNAPPY=1
+``` shell
+sudo cmake ../  -DCMAKE_BUILD_TYPE=Release -DWITH_SNAPPY=1
+sudo make -j 64
+sudo make install
+```
+
 ## 参考
 1. rocksdb官方编译说明： https://github.com/facebook/rocksdb/blob/main/INSTALL.md
 2. postgres外部表： https://github.com/youngerking1985/pgrocks-fdw

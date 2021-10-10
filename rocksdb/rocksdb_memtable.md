@@ -8,11 +8,12 @@
 ## 测试代码
 
 ## 主要相关类解释
-MemTable
-MemTableRep
-MemTableIterator
+MemTable：内存表的封装类，封装了具体的实现
+MemTableRep：内存表的实现类
+MemTableIterator：
 MemTableBackwardIterator
 MemTableList
+Cleanable：抽象类，
 
 ## 流程说明
 ### Add关键流程
@@ -44,10 +45,8 @@ MarkImmutable
 4. LRUCache, best实现、pg实现、rocksdb实现
 5. 图、DFS、BFS、Dijkstra算法；
 6. MemTable
-7. 做一个rocksdb和redis的对比测试（不写wal）
-- 都用内存，不同value对比
-- 数据量超过内存，对比
-8. Iterator
+8. Iterator，MemTableIterator，
+9. 实现一个移动构造函数，并测试
 
 ## pop
 
